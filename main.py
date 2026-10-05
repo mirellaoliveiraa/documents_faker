@@ -9,15 +9,77 @@ from faker import Faker
 BASE_WIDTH = 1080
 BASE_HEIGHT = 1920
 
-OUTPUT_DIR = "./output"
+OUTPUT_DIR = "./output/novos"
 ASSETS_DIR = "./assets"
 ASS_DIR = os.path.join(ASSETS_DIR, "ass_elements")
 QR_DIR = os.path.join(ASSETS_DIR, "qr")
 LOGO_DIR = os.path.join(ASSETS_DIR, "logo_sign")
 SELOS_DIR = os.path.join(ASSETS_DIR, "selos_rodape")
 FONTS_DIR = os.path.join(ASSETS_DIR, "fonts")
+STAMP_DIR = os.path.join(ASSETS_DIR, "stamp")
+STAMP_TEXT = "Dr. Exemplo da Silva\nMédico\nCRM-XX 00000"
+CLINIC_ADDRESS = "Avenida Altamirando de Araújo Ramos, 253 - Centro, Simões Filho - BA"
 
 faker = Faker("pt_BR")
+
+def carregar_fonte(tamanho):
+    """Carrega uma fonte disponível no sistema ou usa a fonte padrão do Pillow."""
+    candidatos = [
+        os.path.join(FONTS_DIR, "arial.ttf"),
+        "arial.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    ]
+    for caminho in candidatos:
+        if os.path.exists(caminho):
+            return ImageFont.truetype(caminho, size=tamanho)
+    return ImageFont.load_default(size=tamanho)
+
+def carregar_fonte_negrito(tamanho):
+    candidatos = [
+        os.path.join(FONTS_DIR, "arialbd.ttf"),
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/Library/Fonts/Arial Bold.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf",
+    ]
+    for caminho in candidatos:
+        if os.path.exists(caminho):
+            return ImageFont.truetype(caminho, size=tamanho)
+    return carregar_fonte(tamanho)
+
+def aplicar_carimbos(base):
+    """Aplica o carimbo textual e uma imagem opcional ao documento."""
+    camada = Image.new("RGBA", base.size, (255, 255, 255, 0))
+    carimbo = ImageDraw.Draw(camada)
+    fonte = carregar_fonte(30)
+    caixa = carimbo.multiline_textbbox(
+        (0, 0),
+        STAMP_TEXT,
+        font=fonte,
+        spacing=2,
+        align="center",
+    )
+    largura = caixa[2] - caixa[0] + 44
+    altura = caixa[3] - caixa[1] + 24
+    x = (BASE_WIDTH - largura) // 2
+    y = (BASE_HEIGHT - altura) // 2
+    carimbo.rectangle(
+        (x, y, x + largura, y + altura),
+        outline=(110, 110, 110, 210),
+        width=2,
+    )
+    carimbo.multiline_text(
+        (BASE_WIDTH // 2, y + 12),
+        STAMP_TEXT,
+        font=fonte,
+        fill=(35, 35, 35, 235),
+        spacing=2,
+        align="center",
+        anchor="ma",
+    )
+    base.paste(camada, (0, 0), camada)
 
 # ================= CARREGAR CSV =================
 df = pd.read_csv("dimensoes.csv")
@@ -32,16 +94,6 @@ for _, row in df.iterrows():
         'X': int(row['X']),
         'Y': int(row['Y'])
     }
-
-# ================= FUNÇÃO DE ROTAÇÃO DO DOCUMENTO FINAL =================
-def aplicar_rotacao_documento(img):
-    angulo = random.choice([0, 2, -2, 180])  # 0: sem rotação, 2/-2 graus leve ou 180 (ponta cabeça)
-    if angulo == 0:
-        return img
-    elif angulo == 180:
-        return img.transpose(Image.ROTATE_180)
-    else:
-        return img.rotate(angulo, expand=True, resample=Image.BICUBIC, fillcolor=(255, 255, 255))
 
 # ================= FUNÇÃO INSERIR IMAGEM (ANTI-SOBREPOSIÇÃO) =================
 def inserir_imagem(base, pasta, item, ocupados):
@@ -93,7 +145,7 @@ def inserir_imagem(base, pasta, item, ocupados):
 
 
 # ================= GERAR DOCUMENTOS =================
-quantidade = 10
+quantidade = 1
 
 for idx in range(1, quantidade + 1):
     base_img = Image.new("RGB", (BASE_WIDTH, BASE_HEIGHT), (255, 255, 255))
@@ -101,59 +153,59 @@ for idx in range(1, quantidade + 1):
     ocupados = []  # Lista para controlar áreas ocupadas
 
     # Dados sintéticos
-    nome_paciente = faker.name()
-    cpf = faker.cpf()
-    endereco = faker.address().replace("\n", " ")
-    crm = f"{random.randint(10000,99999)}/SP"
+    nome_paciente = "Alan Geovani Barboza Santos"
+    cpf = "090.929.189-62"
+    endereco = CLINIC_ADDRESS
+    idade = "33 anos"
+    crm = "25.751/BA"
 
     # Título
-    titulo = random.choice(["ATESTADO MÉDICO", "RECEITUÁRIO", "LAUDO MÉDICO"])
-    titulo_font = ImageFont.truetype("arial.ttf", size=42)
+    titulo = "PRESCRIÇÃO MÉDICA"
+    titulo_font = carregar_fonte_negrito(42)
     draw.text((300, 250), titulo, fill="black", font=titulo_font)
 
     # Cabeçalho
-    cabecalho = f"Nome: {nome_paciente}   CPF: {cpf}\nEndereço: {endereco}\nCRM: {crm}\n\n"
-    cabecalho_font = ImageFont.truetype("arial.ttf", size=26)
+    cabecalho = (
+        f"Nome: {nome_paciente}   CPF: {cpf}\n"
+        f"Idade: {idade}\n"
+        f"Endereço: {endereco}\n"
+        f"CRM: {crm}\n\n"
+    )
+    cabecalho_font = carregar_fonte(26)
     draw.text((100, 320), cabecalho, fill="black", font=cabecalho_font)
 
     # Texto corpo
-    texto = " ".join([faker.paragraph(nb_sentences=5) for _ in range(3)])
-    linhas = textwrap.wrap(texto, width=70)
-    font = ImageFont.truetype("arial.ttf", size=28)
+    texto = """PRESCRIÇÃO MÉDICA
+Nome do medicamento: AMOXICILINA + CLAVULANATO DE POTÁSSIO
+Concentração: 600mg/5mL
+Forma farmacêutica:  Suspensão Oral
+Quantidade: 2 Frascos de 50mL
+Posologia: dministrar 2,6 mL (aproximadamente 2,5 a 3 mL) por via oral, de 12 em 12 horas, durante 10
+dias -
+."""
+    font = carregar_fonte(28)
+
+    linhas = []
+    for paragrafo in texto.splitlines():
+        linhas.extend(textwrap.wrap(paragrafo, width=55) or [""])
 
     for i, linha in enumerate(linhas):
         y = 500 + i * 35
         draw.text((100, y), linha, fill="black", font=font)
 
-    # Inserir logos
-    if os.listdir(LOGO_DIR):
-        for logo in random.sample(os.listdir(LOGO_DIR), k=min(2, len(os.listdir(LOGO_DIR)))):
-            inserir_imagem(base_img, LOGO_DIR, logo.split('.')[0], ocupados)
+    rodape_font = carregar_fonte(20)
+    rodape_linhas = textwrap.wrap(CLINIC_ADDRESS, width=70)
+    rodape_y = BASE_HEIGHT - 105
+    for i, linha in enumerate(rodape_linhas):
+        largura = draw.textlength(linha, font=rodape_font)
+        draw.text(((BASE_WIDTH - largura) / 2, rodape_y + i * 25), linha, fill="black", font=rodape_font)
 
-    # Inserir QR codes (🔥 agora SEM duplicar!)
-    if os.listdir(QR_DIR):
-        qr_selecionado = random.choice(os.listdir(QR_DIR))
-        inserir_imagem(base_img, QR_DIR, qr_selecionado.split('.')[0], ocupados)
+    draw.rectangle((40, 40, BASE_WIDTH - 40, BASE_HEIGHT - 40), outline="black", width=3)
 
-    # Inserir assinatura
-    if os.listdir(ASS_DIR):
-        assinatura = random.choice(os.listdir(ASS_DIR))
-        inserir_imagem(base_img, ASS_DIR, assinatura.split('.')[0], ocupados)
+    # O documento usa somente o logotipo HCOM como imagem institucional.
+    inserir_imagem(base_img, LOGO_DIR, "hcom", ocupados)
 
-    # Inserir selos rodapé
-    if os.listdir(SELOS_DIR):
-        for selo in os.listdir(SELOS_DIR):
-            inserir_imagem(base_img, SELOS_DIR, selo.split('.')[0], ocupados)
-
-    # Texto fixo rodapé
-    rodape_text = "Documento assinado digitalmente. Valide em www.site.com.br"
-    rodape_font = ImageFont.truetype("arial.ttf", size=20)
-    rodape_y = 1850
-    text_width = draw.textlength(rodape_text, font=rodape_font)
-    draw.text(((BASE_WIDTH - text_width) / 2, rodape_y), rodape_text, fill="black", font=rodape_font)
-
-    # 🔥 APLICAR ROTAÇÃO NO DOCUMENTO FINAL INTEIRO
-    base_img = aplicar_rotacao_documento(base_img)
+    aplicar_carimbos(base_img)
 
     # Salvar PDF
     if not os.path.exists(OUTPUT_DIR):
